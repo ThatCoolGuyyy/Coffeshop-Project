@@ -11,6 +11,12 @@ app = Flask(__name__)
 setup_db(app)
 CORS(app)
 
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,true')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
 db_drop_and_create_all()
 
 @app.route('/drinks')
@@ -25,19 +31,17 @@ def get_drinks():
         'drinks': [drink.short() for drink in drinks]
     }), 200
 
-@app.route('/drinks_detail')
+@app.route('/drinks-detail', methods=['GET'])
 @requires_auth('get:drinks-detail')
 def get_drink_detail(payload):
     try:
         drinks = Drink.query.all()
 
-        if Drink is None:
-            abort(404)
-
         return jsonify({
             'success': True,
             'drinks': [drink.long() for drink in drinks]
         }), 200
+        
     except Exception as e:
         print(e)
         abort(422)
@@ -65,29 +69,36 @@ def add_drinks(payload):
 
 @app.route('/drinks/<int:id>', methods=['PATCH'])
 @requires_auth('patch:drinks')
-def update_drink(id, payload):
+def update_drink(payload, id):
     body = request.get_json()
+    drink = Drink.query.filter(Drink.id == id).one_or_none()
 
-    drink = Drink.query.get(id)
-
-    if drink is None:
+    if not drink:
         abort(404)
 
-    drink.title = body['title']
-    drink.recipe = body['recipe']
-    drink.update()
+    try:
+        title = body.get('title')
+        recipe = body.get('recipe')
+        if title:
+            drink.title = title
+
+        if recipe:
+            drink.recipe = json.dumps(body['recipe'])
+
+        drink.update()
+    except BaseException:
+        abort(400)
 
     return jsonify({
-        'success': True,
-        'drinks': [drink.long()]
-    })
-
+        'success': True, 
+        'drinks': [drink.long()
+        ]}), 200
 
 
 @app.route('/drinks/<int:id>', methods=['DELETE'])
 @requires_auth('delete:drinks')
-def delete_drink(id, payload):
-    drink = Drink.query.get(id)
+def delete_drink(payload, id):
+    drink = Drink.query.filter(Drink.id == id).one_or_none()
 
     if drink is None:
         abort(404)
@@ -102,10 +113,6 @@ def delete_drink(id, payload):
 
     except Exception:
         abort(422)
-
-
-
-# Error Handling
 
 
 @app.errorhandler(422)
