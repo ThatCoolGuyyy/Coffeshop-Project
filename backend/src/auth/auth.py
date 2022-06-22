@@ -1,5 +1,5 @@
 import json
-from flask import request, _request_ctx_stack
+from flask import abort, request, _request_ctx_stack
 from functools import wraps
 from jose import jwt
 from urllib.request import urlopen
@@ -103,7 +103,7 @@ def verify_decode_jwt(token):
                 rsa_key,
                 algorithms=ALGORITHMS,
                 audience=API_AUDIENCE,
-                issuer='https://' + AUTH0_DOMAIN + '/'
+                issuer='https://' + AUTH0_DOMAIN + '/',
             )
 
             return payload
@@ -129,12 +129,17 @@ def verify_decode_jwt(token):
                 'description': 'Unable to find the appropriate key.'
             }, 400)
 
+
 def requires_auth(permission=''):
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
             token = get_token_auth_header()
-            payload = verify_decode_jwt(token)
+            try:
+                payload = verify_decode_jwt(token)
+            except Exception as e:
+                print(e)
+                abort(401)
             check_permissions(permission, payload)
             return f(payload, *args, **kwargs)
         return wrapper
